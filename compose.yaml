@@ -1,7 +1,20 @@
 name: redeliver
 
+# Settings shared by every long-running service.
+x-common: &common
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
 services:
   app:
+    <<: *common
     build:
       context: ./app
       additional_contexts:
@@ -10,7 +23,7 @@ services:
         source: https://github.com/rezarg-dev/redeliver.git#${REDELIVER_REF:-main}
     image: redeliver:local
     init: true
-    restart: unless-stopped
+    read_only: true
     environment:
       ADMIN_TOKEN_FILE: /run/secrets/admin_token
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -20,10 +33,18 @@ services:
       - app-data:/data
     networks:
       - backend
+    # On SIGTERM the app waits up to 15 s for deliveries that are in flight.
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
 
   proxy:
+    <<: *common
     image: nginxinc/nginx-unprivileged:1.27-alpine
-    restart: unless-stopped
+    read_only: true
     tmpfs:
       - /tmp
     volumes:
@@ -44,6 +65,11 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 64M
 
 networks:
   # Services with a published port.
