@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # The app is scraped directly over the internal "monitoring" network.
+  # Its /metrics endpoint is not exposed through the proxy.
+  - job_name: redeliver
+    static_configs:
+      - targets: ["app:3000"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
