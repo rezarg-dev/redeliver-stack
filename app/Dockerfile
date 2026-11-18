@@ -33,6 +33,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=source package.json ./
 COPY --from=source src ./src
 COPY --from=source scripts ./scripts
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/
 
 # The database lives in /data. Creating the directory with the right owner
 # here means a fresh named volume mounted on it is writable by "node".
@@ -48,4 +49,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "--disable-warning=ExperimentalWarning", "src/server.js"]

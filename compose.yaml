@@ -12,8 +12,10 @@ services:
     init: true
     restart: unless-stopped
     environment:
-      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in .env}
+      ADMIN_TOKEN_FILE: /run/secrets/admin_token
       LOG_LEVEL: ${LOG_LEVEL:-info}
+    secrets:
+      - admin_token
     ports:
       - "3000:3000"
     volumes:
@@ -21,3 +23,7 @@ services:
 
 volumes:
   app-data:
+
+secrets:
+  admin_token:
+    file: ./secrets/admin_token
