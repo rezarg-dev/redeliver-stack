@@ -1,0 +1,23 @@
+name: redeliver
+
+services:
+  app:
+    build:
+      context: ./app
+      additional_contexts:
+        # The application lives in its own repository. BuildKit fetches it
+        # at build time; REDELIVER_REF selects a branch, tag or commit.
+        source: https://github.com/rezarg-dev/redeliver.git#${REDELIVER_REF:-main}
+    image: redeliver:local
+    init: true
+    restart: unless-stopped
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in .env}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3000:3000"
+    volumes:
+      - app-data:/data
+
+volumes:
+  app-data:
