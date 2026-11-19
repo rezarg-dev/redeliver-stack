@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: redeliver
+    type: file
+    # Dashboards are owned by the files in this repository. Changes made in
+    # the UI cannot be saved, edit the JSON instead.
+    allowUiUpdates: false
+    disableDeletion: true
+    options:
+      path: /etc/grafana/dashboards
