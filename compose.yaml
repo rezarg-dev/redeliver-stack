@@ -12,15 +12,19 @@ x-common: &common
       max-size: 10m
       max-file: "3"
 
+# The app image is also used by the demo services, so its build
+# definition is shared.
+x-app-build: &app-build
+  context: ./app
+  additional_contexts:
+    # The application lives in its own repository. BuildKit fetches it at
+    # build time; REDELIVER_REF selects a branch, tag or commit.
+    source: https://github.com/rezarg-dev/redeliver.git#${REDELIVER_REF:-main}
+
 services:
   app:
     <<: *common
-    build:
-      context: ./app
-      additional_contexts:
-        # The application lives in its own repository. BuildKit fetches it
-        # at build time; REDELIVER_REF selects a branch, tag or commit.
-        source: https://github.com/rezarg-dev/redeliver.git#${REDELIVER_REF:-main}
+    build: *app-build
     image: redeliver:local
     init: true
     read_only: true
@@ -135,6 +139,46 @@ services:
         limits:
           cpus: "0.5"
           memory: 256M
+
+  # --- "demo" profile: a fake destination and a traffic generator --------
+
+  receiver:
+    <<: *common
+    profiles: [demo]
+    build: *app-build
+    image: redeliver:local
+    read_only: true
+    # Answers the first three requests with 503 to show retries.
+    command: ["node", "scripts/receiver.js", "--port", "9000", "--fail", "3"]
+    healthcheck:
+      disable: true
+    networks:
+      - backend
+
+  traffic:
+    <<: *common
+    profiles: [demo]
+    build: *app-build
+    image: redeliver:local
+    read_only: true
+    command: ["node", "/demo/traffic.js"]
+    environment:
+      ADMIN_TOKEN_FILE: /run/secrets/admin_token
+      APP_URL: http://app:3000
+      RECEIVER_URL: http://receiver:9000/hook
+    secrets:
+      - admin_token
+    volumes:
+      - ./demo/traffic.js:/demo/traffic.js:ro
+    healthcheck:
+      disable: true
+    networks:
+      - backend
+    depends_on:
+      app:
+        condition: service_healthy
+      receiver:
+        condition: service_started
 
 networks:
   # Services with a published port.
