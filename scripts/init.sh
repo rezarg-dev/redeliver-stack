@@ -29,6 +29,7 @@ mkdir -p secrets
 chmod 700 secrets
 
 create_secret admin_token
+create_secret grafana_admin_password
 
 if [[ -f .env ]]; then
   echo "kept     .env"
