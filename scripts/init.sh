@@ -28,6 +28,10 @@ create_secret() {
 mkdir -p secrets
 chmod 700 secrets
 
+# Created here so that it belongs to you. If Docker creates a missing bind
+# mount directory itself, it is owned by root on Linux.
+mkdir -p backups
+
 create_secret admin_token
 create_secret grafana_admin_password
 

@@ -180,6 +180,19 @@ services:
       receiver:
         condition: service_started
 
+  # --- "tools" profile: one-shot jobs, started with "docker compose run" --
+
+  backup:
+    profiles: [tools]
+    build: ./backup
+    image: redeliver-backup:local
+    environment:
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+    volumes:
+      - app-data:/data
+      - ./backups:/backups
+    network_mode: none
+
 networks:
   # Services with a published port.
   edge:
