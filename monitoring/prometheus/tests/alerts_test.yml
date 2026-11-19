@@ -1,0 +1,127 @@
+# Unit tests for the alert rules. Run with "make lint" or directly:
+#   promtool test rules monitoring/prometheus/tests/alerts_test.yml
+
+rule_files:
+  - ../rules/redeliver.yml
+
+evaluation_interval: 1m
+
+tests:
+  # The app disappears after two minutes.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="redeliver", instance="app:3000"}'
+        values: "1 1 0 0 0"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RedeliverDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: RedeliverDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: redeliver
+              instance: app:3000
+            exp_annotations:
+              summary: redeliver is not answering scrapes
+              description: >-
+                Prometheus has not been able to scrape app:3000 for
+                a minute. Webhooks are most likely being rejected.
+
+  # A single dead delivery is enough to alert, without any waiting period.
+  - interval: 1m
+    input_series:
+      - series: 'redeliver_deliveries{status="dead"}'
+        values: "0 0 2 2"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: DeadDeliveries
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: DeadDeliveries
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              status: dead
+            exp_annotations:
+              summary: 2 deliveries have been given up on
+              description: >-
+                These deliveries used up all their attempts. Find them with
+                GET /api/deliveries?status=dead and retry them once the
+                destination works again.
+
+  # A large queue that is draining must not alert, a growing one must.
+  - interval: 1m
+    input_series:
+      - series: 'redeliver_deliveries{status="pending", instance="draining"}'
+        values: "900-20x30"
+      - series: 'redeliver_deliveries{status="pending", instance="growing"}'
+        values: "50+20x30"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: DeliveryBacklogGrowing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              status: pending
+              instance: growing
+            exp_annotations:
+              summary: 550 deliveries are waiting and the queue keeps growing
+              description: >-
+                Deliveries are queued faster than they are sent. A destination is
+                probably down or slow.
+
+  # 3 of 4 attempts fail for long enough.
+  - interval: 1m
+    input_series:
+      - series: 'redeliver_delivery_attempts_total{outcome="delivered"}'
+        values: "0+60x20"
+      - series: 'redeliver_delivery_attempts_total{outcome="retry"}'
+        values: "0+180x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: MostDeliveryAttemptsFail
+        exp_alerts: []
+      - eval_time: 18m
+        alertname: MostDeliveryAttemptsFail
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: More than half of all delivery attempts are failing
+              description: >-
+                75% of the attempts in the last five
+                minutes did not get a 2xx answer.
+
+  # Healthy traffic: nothing fires.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="redeliver", instance="app:3000"}'
+        values: "1x20"
+      - series: 'redeliver_deliveries{status="dead"}'
+        values: "0x20"
+      - series: 'redeliver_deliveries{status="pending"}'
+        values: "3 1 4 1 5 9 2 6 5 3 5 8 9 7 9 3 2 3 8 4 6"
+      - series: 'redeliver_delivery_attempts_total{outcome="delivered"}'
+        values: "0+120x20"
+      - series: 'redeliver_delivery_attempts_total{outcome="retry"}'
+        values: "0+3x20"
+      - series: 'redeliver_events_rejected_total{reason="invalid_signature"}'
+        values: "0+1x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: RedeliverDown
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: DeadDeliveries
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: DeliveryBacklogGrowing
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: MostDeliveryAttemptsFail
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: SignatureFailures
+        exp_alerts: []
