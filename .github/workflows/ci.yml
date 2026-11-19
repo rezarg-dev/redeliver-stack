@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make init
+      - run: make lint
+
+  stack:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start the stack
+        run: make up
+
+      - name: Smoke test
+        run: make smoke
+
+      - name: Backup and restore
+        run: |
+          make backup
+          snapshot="$(ls backups/*.db.gz | head -n 1)"
+          RESTORE_YES=1 make restore FILE="$snapshot"
+          docker compose up --detach --wait
+          make smoke
+
+      - name: Show logs
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: make clean
