@@ -1,0 +1,64 @@
+groups:
+  - name: redeliver
+    rules:
+      - alert: RedeliverDown
+        expr: up{job="redeliver"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: redeliver is not answering scrapes
+          description: >-
+            Prometheus has not been able to scrape {{ $labels.instance }} for
+            a minute. Webhooks are most likely being rejected.
+
+      - alert: DeadDeliveries
+        expr: redeliver_deliveries{status="dead"} > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} deliveries have been given up on"
+          description: >-
+            These deliveries used up all their attempts. Find them with
+            GET /api/deliveries?status=dead and retry them once the
+            destination works again.
+
+      - alert: DeliveryBacklogGrowing
+        expr: >-
+          redeliver_deliveries{status="pending"} > 100
+          and
+          deriv(redeliver_deliveries{status="pending"}[10m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} deliveries are waiting and the queue keeps growing"
+          description: >-
+            Deliveries are queued faster than they are sent. A destination is
+            probably down or slow.
+
+      - alert: MostDeliveryAttemptsFail
+        expr: >-
+          sum(rate(redeliver_delivery_attempts_total{outcome!="delivered"}[5m]))
+          /
+          sum(rate(redeliver_delivery_attempts_total[5m]))
+          > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than half of all delivery attempts are failing
+          description: >-
+            {{ $value | humanizePercentage }} of the attempts in the last five
+            minutes did not get a 2xx answer.
+
+      - alert: SignatureFailures
+        expr: rate(redeliver_events_rejected_total{reason="invalid_signature"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Many webhooks arrive with a wrong signature
+          description: >-
+            Either a sender is configured with the wrong secret, or someone is
+            probing the ingest endpoint.
